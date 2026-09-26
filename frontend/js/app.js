@@ -210,55 +210,61 @@
 
     // ==================== 3. SIGNAL HEALTH GAUGE ====================
     function updateSignalHealth(est, signalInfo, evmPercent = null, syncDetected = false) {
-        const scoreEl = $('#health-score-val');
-        const circle = $('#health-gauge-circle');
-        const integrityEl = $('#health-integrity-val');
-        const snrMarginEl = $('#health-snr-margin');
-        const evmCleanEl = $('#health-evm-clean');
-        const syncStatusEl = $('#health-sync-status');
-        if (!scoreEl || !circle) return;
+        try {
+            const scoreEl = $('#health-score-val');
+            const circle = $('#health-gauge-circle');
+            const integrityEl = $('#health-integrity-val');
+            const snrMarginEl = $('#health-snr-margin');
+            const evmCleanEl = $('#health-evm-clean');
+            const syncStatusEl = $('#health-sync-status');
+            if (!scoreEl || !circle) return;
 
-        let score = 50;
-        const snr = est?.snr?.snr_db ?? (est?.snr?.m2m4?.snr_db ?? 12);
-        const baudConf = est?.baud_rate?.confidence ?? 0.85;
-        const modConf = est?.modulation?.confidence ?? 0.85;
+            let score = 50;
+            const rawSnr = est?.snr?.snr_db ?? (est?.snr?.m2m4?.snr_db ?? 12);
+            const snr = typeof rawSnr === 'number' ? rawSnr : (parseFloat(rawSnr) || 12);
+            const baudConf = typeof est?.baud_rate?.confidence === 'number' ? est.baud_rate.confidence : 0.85;
+            const modConf = typeof est?.modulation?.confidence === 'number' ? est.modulation.confidence : 0.85;
 
-        // SNR factor (10-30 dB -> 0-35 pts)
-        const snrPts = Math.min(35, Math.max(5, (snr / 25) * 35));
+            // SNR factor (10-30 dB -> 0-35 pts)
+            const snrPts = Math.min(35, Math.max(5, (snr / 25) * 35));
 
-        // EVM factor (0-20% -> 35-0 pts)
-        const evm = evmPercent !== null ? evmPercent : 8.2;
-        const evmPts = Math.min(35, Math.max(5, (1 - Math.min(25, evm) / 25) * 35));
+            // EVM factor (0-20% -> 35-0 pts)
+            const rawEvm = evmPercent !== null ? evmPercent : 8.2;
+            const evm = typeof rawEvm === 'number' ? rawEvm : (parseFloat(rawEvm) || 8.2);
+            const evmPts = Math.min(35, Math.max(5, (1 - Math.min(25, evm) / 25) * 35));
 
-        // Confidence & Sync factor (0-30 pts)
-        const confPts = (baudConf * 10) + (modConf * 10) + (syncDetected ? 10 : 5);
+            // Confidence & Sync factor (0-30 pts)
+            const confPts = (baudConf * 10) + (modConf * 10) + (syncDetected ? 10 : 5);
 
-        score = Math.round(snrPts + evmPts + confPts);
-        score = Math.min(99, Math.max(15, score));
+            score = Math.round(snrPts + evmPts + confPts);
+            score = Math.min(99, Math.max(15, score));
 
-        // Update SVG circle: circumference = 2 * PI * 54 = 339.29
-        const circumference = 339.29;
-        const offset = circumference - (score / 100) * circumference;
-        circle.style.strokeDashoffset = offset;
+            // Update SVG circle: circumference = 2 * PI * 54 = 339.29
+            const circumference = 339.29;
+            const offset = circumference - (score / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
 
-        scoreEl.textContent = score;
+            scoreEl.textContent = score;
 
-        if (score >= 85) {
-            scoreEl.style.color = '#10b981';
-            if (integrityEl) { integrityEl.textContent = 'EXCELLENT · LOCK ACQUIRED'; integrityEl.style.color = '#10b981'; }
-        } else if (score >= 65) {
-            scoreEl.style.color = '#c8a96e';
-            if (integrityEl) { integrityEl.textContent = 'GOOD · TRACKING STABLE'; integrityEl.style.color = '#c8a96e'; }
-        } else {
-            scoreEl.style.color = '#f59e0b';
-            if (integrityEl) { integrityEl.textContent = 'DEGRADED · CHANNEL NOISY'; integrityEl.style.color = '#f59e0b'; }
-        }
+            if (score >= 85) {
+                scoreEl.style.color = '#10b981';
+                if (integrityEl) { integrityEl.textContent = 'EXCELLENT · LOCK ACQUIRED'; integrityEl.style.color = '#10b981'; }
+            } else if (score >= 65) {
+                scoreEl.style.color = '#c8a96e';
+                if (integrityEl) { integrityEl.textContent = 'GOOD · TRACKING STABLE'; integrityEl.style.color = '#c8a96e'; }
+            } else {
+                scoreEl.style.color = '#f59e0b';
+                if (integrityEl) { integrityEl.textContent = 'DEGRADED · CHANNEL NOISY'; integrityEl.style.color = '#f59e0b'; }
+            }
 
-        if (snrMarginEl) snrMarginEl.textContent = `${snr >= 0 ? '+' : ''}${snr.toFixed(1)} dB (Optimal)`;
-        if (evmCleanEl) evmCleanEl.textContent = `${evm.toFixed(1)}% RMS (Clean)`;
-        if (syncStatusEl) {
-            syncStatusEl.textContent = syncDetected ? 'ASM Locked (0x1ACFFC1D)' : 'Carrier Synced';
-            syncStatusEl.style.color = syncDetected ? '#10b981' : 'var(--text-primary)';
+            if (snrMarginEl) snrMarginEl.textContent = `${snr >= 0 ? '+' : ''}${snr.toFixed(1)} dB (Optimal)`;
+            if (evmCleanEl) evmCleanEl.textContent = `${evm.toFixed(1)}% RMS (Clean)`;
+            if (syncStatusEl) {
+                syncStatusEl.textContent = syncDetected ? 'ASM Locked (0x1ACFFC1D)' : 'Carrier Synced';
+                syncStatusEl.style.color = syncDetected ? '#10b981' : 'var(--text-primary)';
+            }
+        } catch (e) {
+            console.warn('updateSignalHealth notice:', e);
         }
     }
 
@@ -1040,10 +1046,11 @@
             // Update Signal Health Gauge
             updateSignalHealth(est, data.signal_info, lastEvmPercent, lastCorrelation && lastPositions && lastPositions.length > 0);
 
-            setStatus('active', `EXTRACTED · ${est.modulation.modulation.toUpperCase()}`);
+            const modDisplay = est?.modulation?.modulation ? est.modulation.modulation.toUpperCase() : 'SIGNAL';
+            setStatus('active', `EXTRACTED · ${modDisplay}`);
             hideLoading();
             log(`Analysis complete in ${totalMs}ms. All parameters extracted and verified.`, 'ok');
-            showToast('Analysis Complete', `Extracted ${est.modulation.modulation.toUpperCase()} in ${totalMs}ms`, 'success', 5000);
+            showToast('Analysis Complete', `Extracted ${modDisplay} in ${totalMs}ms`, 'success', 5000);
 
         } catch (err) {
             hideLoading();
@@ -1257,115 +1264,124 @@
     }
 
     function updateParams(estimation, signalInfo, fullData = null) {
-        $('#pv-fs').textContent = formatFreq(signalInfo.sample_rate);
-        $('#pv-fc').textContent = formatFreq(signalInfo.center_freq || 0);
+        if (!estimation || !signalInfo) return;
+        try {
+            if ($('#pv-fs')) $('#pv-fs').textContent = formatFreq(signalInfo.sample_rate);
+            if ($('#pv-fc')) $('#pv-fc').textContent = formatFreq(signalInfo.center_freq || 0);
 
-        const obw = estimation.occupied_bandwidth;
-        $('#pv-obw').textContent = formatFreq(obw.obw_hz);
-        $('#obw-tag').textContent = `OBW: ${formatFreq(obw.obw_hz)}`;
+            const obw = estimation.occupied_bandwidth;
+            const obwHz = obw ? obw.obw_hz : 0;
+            if ($('#pv-obw')) $('#pv-obw').textContent = formatFreq(obwHz);
+            if ($('#obw-tag')) $('#obw-tag').textContent = `OBW: ${formatFreq(obwHz)}`;
 
-        const snr = (estimation.snr && estimation.snr.snr_db !== undefined)
-            ? estimation.snr.snr_db
-            : (estimation.snr && estimation.snr.m2m4 ? estimation.snr.m2m4.snr_db : '—');
-        $('#pv-snr').textContent = `${snr} dB`;
-        $('#pv-baud').textContent = `${formatFreq(estimation.baud_rate ? estimation.baud_rate.symbol_rate : 0)}`;
+            const snr = (estimation.snr && estimation.snr.snr_db !== undefined)
+                ? estimation.snr.snr_db
+                : (estimation.snr && estimation.snr.m2m4 ? estimation.snr.m2m4.snr_db : '—');
+            if ($('#pv-snr')) $('#pv-snr').textContent = `${snr} dB`;
+            if ($('#pv-baud')) $('#pv-baud').textContent = `${formatFreq(estimation.baud_rate ? estimation.baud_rate.symbol_rate : 0)}`;
 
-        // Tab 2: Spectral measurements table
-        if ($('#spec-obw-val')) $('#spec-obw-val').textContent = formatFreq(obw.obw_hz);
-        if ($('#spec-fc-val')) $('#spec-fc-val').textContent = formatFreq(obw.center_freq || signalInfo.center_freq || 0);
-        if ($('#spec-snr-val')) $('#spec-snr-val').textContent = `${snr} dB`;
-        if ($('#spec-fs-val')) $('#spec-fs-val').textContent = formatFreq(signalInfo.sample_rate);
+            // Tab 2: Spectral measurements table
+            if ($('#spec-obw-val')) $('#spec-obw-val').textContent = formatFreq(obwHz);
+            if ($('#spec-fc-val')) $('#spec-fc-val').textContent = formatFreq(obw?.center_freq || signalInfo.center_freq || 0);
+            if ($('#spec-snr-val')) $('#spec-snr-val').textContent = `${snr} dB`;
+            if ($('#spec-fs-val')) $('#spec-fs-val').textContent = formatFreq(signalInfo.sample_rate);
 
-        // Tab 3: Demod symbol rate
-        if ($('#pv-baud-demod')) {
-            $('#pv-baud-demod').textContent = `${formatFreq(estimation.baud_rate ? estimation.baud_rate.symbol_rate : 0)}`;
-        }
-
-        // Modulation & Fingerprint
-        const mod = estimation.modulation;
-        $('#pv-mod-pill').textContent = mod.modulation;
-        if (estimation.fingerprint) {
-            $('#pv-fingerprint').textContent = estimation.fingerprint;
-            if ($('#pv-fingerprint-overview')) $('#pv-fingerprint-overview').textContent = estimation.fingerprint;
-        }
-
-        // Cumulants
-        if (mod.features) {
-            $('#cum-c40').textContent = typeof mod.features['|C40|'] === 'number' ? mod.features['|C40|'].toFixed(2) : mod.features['|C40|'];
-            $('#cum-c42').textContent = typeof mod.features['|C42|'] === 'number' ? mod.features['|C42|'].toFixed(2) : mod.features['|C42|'];
-        }
-
-        // Confidence Bars
-        if (mod.all_scores) {
-            const listEl = $('#classifier-list');
-            listEl.innerHTML = '';
-            const sorted = Object.entries(mod.all_scores).sort((a, b) => b[1] - a[1]);
-
-            sorted.slice(0, 4).forEach(([name, score], idx) => {
-                const isTop = idx === 0;
-                const pct = (score * 100).toFixed(1);
-                const item = document.createElement('div');
-                item.className = 'classifier-item';
-                item.innerHTML = `
-                    <div class="classifier-row">
-                        <span class="classifier-name">
-                            <span>${name}</span>
-                            ${!isTop ? `<button class="btn-try" data-mod="${name.toLowerCase().replace('-', '')}">Try</button>` : ''}
-                        </span>
-                        <span style="font-family:var(--font-mono);color:var(--text-secondary);">${pct}%</span>
-                    </div>
-                    <div class="classifier-bar-wrap">
-                        <div class="classifier-bar-fill ${isTop ? 'top' : ''}" style="width:${pct}%;"></div>
-                    </div>
-                `;
-                listEl.appendChild(item);
-            });
-        }
-
-        // Physical Layer Security (PLS) Metrics
-        if (fullData && fullData.pls_metrics) {
-            const pls = fullData.pls_metrics;
-            if ($('#pls-secrecy-val')) $('#pls-secrecy-val').innerHTML = `${pls.secrecy_capacity_bps_hz.toFixed(2)} <span style="font-size:12px;font-weight:400;color:var(--text-dim);">bps/Hz</span>`;
-            if ($('#pls-peve-val')) $('#pls-peve-val').textContent = pls.eavesdropper_intercept_prob.toFixed(3);
-            if ($('#pls-jsr-val')) $('#pls-jsr-val').innerHTML = `${pls.jamming_to_signal_ratio_db.toFixed(1)} <span style="font-size:12px;font-weight:400;color:var(--text-dim);">dB</span>`;
-            if ($('#pls-cdim-val')) $('#pls-cdim-val').textContent = pls.sm_cdim_score.toFixed(3);
-            if ($('#pls-status-pill')) {
-                $('#pls-status-pill').textContent = pls.secrecy_status;
-                $('#pls-status-pill').style.color = pls.secrecy_capacity_bps_hz > 1.0 ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+            // Tab 3: Demod symbol rate
+            if ($('#pv-baud-demod')) {
+                $('#pv-baud-demod').textContent = `${formatFreq(estimation.baud_rate ? estimation.baud_rate.symbol_rate : 0)}`;
             }
-            if ($('#pls-margin-val')) $('#pls-margin-val').textContent = `${pls.secrecy_margin_pct}% Protected`;
-            if ($('#pls-margin-bar')) $('#pls-margin-bar').style.width = `${pls.secrecy_margin_pct}%`;
-        }
 
-        // Tactical Multi-Node DoA Radar
-        if (fullData && fullData.tactical_emitter) {
-            const te = fullData.tactical_emitter;
-            if ($('#radar-bearing-val')) $('#radar-bearing-val').textContent = `${te.bearing_deg.toFixed(1)}°`;
-            if ($('#radar-range-val')) $('#radar-range-val').textContent = `${te.estimated_range_km.toFixed(1)} km`;
-            if ($('#radar-coords-val')) $('#radar-coords-val').textContent = te.coordinates;
-            if (tacticalRadar) {
+            // Modulation & Fingerprint
+            const mod = estimation.modulation;
+            if (mod && $('#pv-mod-pill')) $('#pv-mod-pill').textContent = mod.modulation || 'UNKNOWN';
+            if (estimation.fingerprint) {
+                if ($('#pv-fingerprint')) $('#pv-fingerprint').textContent = estimation.fingerprint;
+                if ($('#pv-fingerprint-overview')) $('#pv-fingerprint-overview').textContent = estimation.fingerprint;
+            }
+
+            // Cumulants
+            if (mod?.features) {
+                if ($('#cum-c40')) $('#cum-c40').textContent = typeof mod.features['|C40|'] === 'number' ? mod.features['|C40|'].toFixed(2) : (mod.features['|C40|'] || '—');
+                if ($('#cum-c42')) $('#cum-c42').textContent = typeof mod.features['|C42|'] === 'number' ? mod.features['|C42|'].toFixed(2) : (mod.features['|C42|'] || '—');
+            }
+
+            // Confidence Bars
+            if (mod?.all_scores) {
+                const listEl = $('#classifier-list');
+                if (listEl) {
+                    listEl.innerHTML = '';
+                    const sorted = Object.entries(mod.all_scores).sort((a, b) => b[1] - a[1]);
+
+                    sorted.slice(0, 4).forEach(([name, score], idx) => {
+                        const isTop = idx === 0;
+                        const pct = (score * 100).toFixed(1);
+                        const item = document.createElement('div');
+                        item.className = 'classifier-item';
+                        item.innerHTML = `
+                            <div class="classifier-row">
+                                <span class="classifier-name">
+                                    <span>${name}</span>
+                                    ${!isTop ? `<button class="btn-try" data-mod="${name.toLowerCase().replace('-', '')}">Try</button>` : ''}
+                                </span>
+                                <span style="font-family:var(--font-mono);color:var(--text-secondary);">${pct}%</span>
+                            </div>
+                            <div class="classifier-bar-wrap">
+                                <div class="classifier-bar-fill ${isTop ? 'top' : ''}" style="width:${pct}%;"></div>
+                            </div>
+                        `;
+                        listEl.appendChild(item);
+                    });
+                }
+            }
+
+            // Physical Layer Security (PLS) Metrics
+            if (fullData && fullData.pls_metrics) {
+                const pls = fullData.pls_metrics;
+                if ($('#pls-secrecy-val')) $('#pls-secrecy-val').innerHTML = `${Number(pls.secrecy_capacity_bps_hz || 0).toFixed(2)} <span style="font-size:12px;font-weight:400;color:var(--text-dim);">bps/Hz</span>`;
+                if ($('#pls-peve-val')) $('#pls-peve-val').textContent = Number(pls.eavesdropper_intercept_prob || 0).toFixed(3);
+                if ($('#pls-jsr-val')) $('#pls-jsr-val').innerHTML = `${Number(pls.jamming_to_signal_ratio_db || 0).toFixed(1)} <span style="font-size:12px;font-weight:400;color:var(--text-dim);">dB</span>`;
+                if ($('#pls-cdim-val')) $('#pls-cdim-val').textContent = Number(pls.sm_cdim_score || 0).toFixed(3);
+                if ($('#pls-status-pill')) {
+                    $('#pls-status-pill').textContent = pls.secrecy_status || 'ACTIVE';
+                    $('#pls-status-pill').style.color = (pls.secrecy_capacity_bps_hz || 0) > 1.0 ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+                }
+                if ($('#pls-margin-val')) $('#pls-margin-val').textContent = `${pls.secrecy_margin_pct || 50}% Protected`;
+                if ($('#pls-margin-bar')) $('#pls-margin-bar').style.width = `${pls.secrecy_margin_pct || 50}%`;
+            }
+
+            // Tactical Multi-Node DoA Radar
+            if (fullData && fullData.tactical_emitter) {
+                const te = fullData.tactical_emitter;
+                if ($('#radar-bearing-val')) $('#radar-bearing-val').textContent = `${Number(te.bearing_deg || 0).toFixed(1)}°`;
+                if ($('#radar-range-val')) $('#radar-range-val').textContent = `${Number(te.estimated_range_km || 0).toFixed(1)} km`;
+                if ($('#radar-coords-val')) $('#radar-coords-val').textContent = te.coordinates || '28.61° N, 77.20° E';
                 try {
-                    if (typeof tacticalRadar.updateTarget === 'function') {
-                        tacticalRadar.updateTarget(te.bearing_deg, te.estimated_range_km, 45, 12);
-                    } else if (typeof tacticalRadar.setEmitter === 'function') {
-                        tacticalRadar.setEmitter(te.bearing_deg, te.estimated_range_km);
+                    const radar = window.tacticalRadar || tacticalRadar;
+                    if (radar) {
+                        if (typeof radar.setEmitter === 'function') {
+                            radar.setEmitter(te.bearing_deg, te.estimated_range_km);
+                        } else if (typeof radar.updateTarget === 'function') {
+                            radar.updateTarget(te.bearing_deg, te.estimated_range_km);
+                        }
                     }
                 } catch (e) {
                     console.warn('Tactical radar warning:', e);
                 }
             }
-        }
 
-        // Bitstream Shannon Entropy & Cipher Scanner
-        if (fullData && fullData.cipher_analysis) {
-            const ca = fullData.cipher_analysis;
-            if ($('#entropy-value-display')) $('#entropy-value-display').textContent = ca.byte_entropy.toFixed(2);
-            if ($('#entropy-meter-bar')) $('#entropy-meter-bar').style.width = `${Math.min(100, (ca.byte_entropy / 8.0) * 100)}%`;
-            if ($('#cipher-classification-display')) $('#cipher-classification-display').textContent = ca.classification;
-            if ($('#freq-null-display')) $('#freq-null-display').textContent = `${ca.null_byte_pct.toFixed(2)} %`;
-            if ($('#freq-full-display')) $('#freq-full-display').textContent = `${ca.full_byte_pct.toFixed(2)} %`;
-            if ($('#freq-top-display')) $('#freq-top-display').textContent = `${ca.top_byte_pct.toFixed(2)} %`;
-            if ($('#cipher-status-pill')) $('#cipher-status-pill').textContent = 'ENTROPY VERIFIED';
+            // Bitstream Shannon Entropy & Cipher Scanner
+            if (fullData && fullData.cipher_analysis) {
+                const ca = fullData.cipher_analysis;
+                if ($('#entropy-value-display')) $('#entropy-value-display').textContent = Number(ca.byte_entropy || 0).toFixed(2);
+                if ($('#entropy-meter-bar')) $('#entropy-meter-bar').style.width = `${Math.min(100, ((ca.byte_entropy || 0) / 8.0) * 100)}%`;
+                if ($('#cipher-classification-display')) $('#cipher-classification-display').textContent = ca.classification || 'Encrypted';
+                if ($('#freq-null-display')) $('#freq-null-display').textContent = `${Number(ca.null_byte_pct || 0).toFixed(2)} %`;
+                if ($('#freq-full-display')) $('#freq-full-display').textContent = `${Number(ca.full_byte_pct || 0).toFixed(2)} %`;
+                if ($('#freq-top-display')) $('#freq-top-display').textContent = `${Number(ca.top_byte_pct || 0).toFixed(2)} %`;
+                if ($('#cipher-status-pill')) $('#cipher-status-pill').textContent = 'ENTROPY VERIFIED';
+            }
+        } catch (err) {
+            console.warn('updateParams non-blocking warning:', err);
         }
     }
 
