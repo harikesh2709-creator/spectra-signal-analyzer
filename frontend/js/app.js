@@ -72,7 +72,17 @@
                 landing.style.display = 'none';
                 dashboard.classList.add('active');
             }
+            setTimeout(() => {
+                if (!signalLoaded) {
+                    loadPhysicalBenchmark('satellite_telemetry_qpsk_leo.iq');
+                }
+            }, 300);
         }
+
+        // Draw initial standby grids on canvases so they are never blank
+        waterfallRenderer?.renderPlaceholder?.();
+        constRenderer?.clear?.();
+        renderPSD(null);
 
         log('SPECTRA initialized. Ready for signal input.', 'info');
         setPipelineStep(1, 'active');
@@ -458,23 +468,37 @@
         });
 
         // Re-measure and redraw canvases in the activated tab
-        setTimeout(() => {
-            if (targetTabId === 'panel-overview') {
-                rfOrbitalVisualizer?.resize();
-                tacticalRadar?.resize();
-            } else if (targetTabId === 'panel-spectral') {
-                waterfallRenderer?.resize();
-                if (lastWfData) waterfallRenderer.render(lastWfData);
-                if (lastPsdData) renderPSD(lastPsdData);
-            } else if (targetTabId === 'panel-constellation') {
-                constRenderer?.resize();
-                if (lastIData && lastQData) constRenderer.render(lastIData, lastQData, lastConstOptions);
-            } else if (targetTabId === 'panel-protocol') {
-                protocolViewer?.resizeCorr();
-                if (lastDepthScores) protocolViewer.renderDepthSearchChart(lastDepthScores, lastBestDepth);
-                if (lastCorrelation) protocolViewer.renderCorrelation(lastCorrelation, lastPositions, lastThreshold);
-            }
-        }, 60);
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                if (targetTabId === 'panel-overview') {
+                    rfOrbitalVisualizer?.resize();
+                    tacticalRadar?.resize();
+                } else if (targetTabId === 'panel-spectral') {
+                    waterfallRenderer?.resize();
+                    if (lastWfData) {
+                        waterfallRenderer.render(lastWfData);
+                    } else {
+                        waterfallRenderer?.renderPlaceholder?.();
+                    }
+                    if (lastPsdData) {
+                        renderPSD(lastPsdData);
+                    } else {
+                        renderPSD(null);
+                    }
+                } else if (targetTabId === 'panel-constellation') {
+                    constRenderer?.resize();
+                    if (lastIData && lastQData) {
+                        constRenderer.render(lastIData, lastQData, lastConstOptions);
+                    } else {
+                        constRenderer?.clear?.();
+                    }
+                } else if (targetTabId === 'panel-protocol') {
+                    protocolViewer?.resizeCorr();
+                    if (lastDepthScores) protocolViewer.renderDepthSearchChart(lastDepthScores, lastBestDepth);
+                    if (lastCorrelation) protocolViewer.renderCorrelation(lastCorrelation, lastPositions, lastThreshold);
+                }
+            }, 60);
+        });
     }
 
     function setupTabs() {
@@ -515,7 +539,7 @@
                 if (select) {
                     select.value = sample;
                 }
-                loadPhysicalBenchmark();
+                loadPhysicalBenchmark(sample);
             };
 
             card.addEventListener('click', handleSelect);
@@ -810,10 +834,15 @@
     }
 
     // ==================== PHYSICAL BENCHMARK INGESTION ====================
-    async function loadPhysicalBenchmark() {
+    async function loadPhysicalBenchmark(targetFilename = null) {
         const select = $('#preset-sample-select');
-        if (!select) return;
-        const filename = select.value;
+        let filename = targetFilename || (select ? select.value : null);
+        if (!filename && select && select.options.length > 0) {
+            filename = select.options[0].value;
+        }
+        if (!filename) filename = 'satellite_telemetry_qpsk_leo.iq';
+        if (select) select.value = filename;
+
         log(`Ingesting physical benchmark: ${filename}...`, 'info');
         setStatus('processing', `INGESTING · ${filename}`);
         showLoading(`Ingesting physical RF dataset ${filename}...`);
@@ -834,7 +863,7 @@
             log(`Physical capture loaded: ${data.filename} (${data.format.toUpperCase()}), Fs=${formatFreq(data.sample_rate)}, ${data.num_samples.toLocaleString()} samples`, 'ok');
 
             hideLoading();
-            runFullAnalysis();
+            await runFullAnalysis();
         } catch (err) {
             hideLoading();
             setStatus('error', 'INGEST FAILED');
@@ -860,6 +889,9 @@
                     waterfallRenderer?.resize();
                     constRenderer?.resize();
                     checkOnboarding();
+                    if (!signalLoaded) {
+                        loadPhysicalBenchmark('satellite_telemetry_qpsk_leo.iq');
+                    }
                 }, 400);
             }
         };
@@ -1312,7 +1344,15 @@
             if ($('#radar-range-val')) $('#radar-range-val').textContent = `${te.estimated_range_km.toFixed(1)} km`;
             if ($('#radar-coords-val')) $('#radar-coords-val').textContent = te.coordinates;
             if (tacticalRadar) {
-                tacticalRadar.updateTarget(te.bearing_deg, te.estimated_range_km, 45, 12);
+                try {
+                    if (typeof tacticalRadar.updateTarget === 'function') {
+                        tacticalRadar.updateTarget(te.bearing_deg, te.estimated_range_km, 45, 12);
+                    } else if (typeof tacticalRadar.setEmitter === 'function') {
+                        tacticalRadar.setEmitter(te.bearing_deg, te.estimated_range_km);
+                    }
+                } catch (e) {
+                    console.warn('Tactical radar warning:', e);
+                }
             }
         }
 
@@ -1332,9 +1372,12 @@
     function renderPSD(psdData) {
         const canvas = $('#psd-canvas');
         if (!canvas) return;
-        const rect = canvas.parentElement.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
+        const parent = canvas.parentElement;
+        const rect = parent ? parent.getBoundingClientRect() : null;
+        const w = (rect && rect.width > 0) ? rect.width : (parent ? parent.clientWidth : 500);
+        const h = (rect && rect.height > 0) ? rect.height : (parent ? parent.clientHeight : 250);
+        canvas.width = Math.max(200, Math.floor(w || 500));
+        canvas.height = Math.max(100, Math.floor(h || 250));
         const ctx = canvas.getContext('2d');
         const W = canvas.width;
         const H = canvas.height;
@@ -1342,7 +1385,21 @@
         ctx.fillStyle = '#030306';
         ctx.fillRect(0, 0, W, H);
 
-        if (!psdData || !psdData.psd_db) return;
+        if (!psdData || !psdData.psd_db || psdData.psd_db.length === 0) {
+            ctx.strokeStyle = 'rgba(200, 169, 110, 0.08)';
+            ctx.lineWidth = 0.5;
+            for (let y = 25; y < H; y += 30) {
+                ctx.beginPath();
+                ctx.moveTo(0, y); ctx.lineTo(W, y);
+                ctx.stroke();
+            }
+            ctx.fillStyle = 'rgba(142, 149, 169, 0.4)';
+            ctx.font = '11px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('1024-PT WELCH PSD · STANDBY', W / 2, H / 2);
+            ctx.textAlign = 'start';
+            return;
+        }
 
         const { psd_db } = psdData;
         const N = psd_db.length;

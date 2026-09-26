@@ -46,6 +46,10 @@ class TacticalRadar {
         this.isJamming = isJamming;
     }
 
+    updateTarget(bearingDeg, rangeKm, profile = 'LEO Spacecraft', isJamming = false) {
+        this.setEmitter(bearingDeg, rangeKm, profile, isJamming);
+    }
+
     start() {
         if (this.animId) cancelAnimationFrame(this.animId);
         const animate = () => {

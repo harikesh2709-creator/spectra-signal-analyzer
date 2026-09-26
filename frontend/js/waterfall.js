@@ -20,28 +20,73 @@ class WaterfallRenderer {
     resize() {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
-        const w = rect.width || (this.canvas.parentElement ? this.canvas.parentElement.clientWidth : 600);
-        const h = rect.height || 140;
-        this.canvas.width = Math.max(200, Math.floor(w));
-        this.canvas.height = Math.max(80, Math.floor(h));
+        const parentW = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : 0;
+        const parentH = this.canvas.parentElement ? this.canvas.parentElement.clientHeight : 0;
+        const w = rect.width > 0 ? rect.width : (parentW > 0 ? parentW : 800);
+        const h = rect.height > 0 ? rect.height : (parentH > 0 ? parentH : 320);
+        this.canvas.width = Math.max(300, Math.floor(w));
+        this.canvas.height = Math.max(120, Math.floor(h));
     }
 
     setColormap(name) {
         this.colormap = name;
         if (this.lastData) this.render(this.lastData);
+        else this.renderPlaceholder();
+    }
+
+    renderPlaceholder() {
+        this.resize();
+        const ctx = this.ctx;
+        const W = this.canvas.width;
+        const H = this.canvas.height;
+
+        ctx.fillStyle = '#030306';
+        ctx.fillRect(0, 0, W, H);
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(200, 169, 110, 0.08)';
+        ctx.lineWidth = 0.5;
+        const cols = 8;
+        const rows = 5;
+        for (let i = 1; i < cols; i++) {
+            const x = (i / cols) * W;
+            ctx.beginPath();
+            ctx.moveTo(x, 0); ctx.lineTo(x, H);
+            ctx.stroke();
+        }
+        for (let j = 1; j < rows; j++) {
+            const y = (j / rows) * H;
+            ctx.beginPath();
+            ctx.moveTo(0, y); ctx.lineTo(W, y);
+            ctx.stroke();
+        }
+
+        // Center standby watermark
+        ctx.fillStyle = 'rgba(200, 169, 110, 0.6)';
+        ctx.font = '600 12px "Outfit", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('RF SPECTRAL RADAR · STANDBY', W / 2, H / 2 - 8);
+
+        ctx.fillStyle = 'rgba(142, 149, 169, 0.5)';
+        ctx.font = '11px "JetBrains Mono", monospace';
+        ctx.fillText('Awaiting raw I/Q or WAV signal ingestion...', W / 2, H / 2 + 12);
+        ctx.textAlign = 'start';
     }
 
     render(data) {
         if (data) this.lastData = data;
         const currentData = data || this.lastData;
-        if (!currentData || !currentData.mag_norm || currentData.mag_norm.length === 0) return;
+        if (!currentData || !currentData.mag_norm || currentData.mag_norm.length === 0) {
+            this.renderPlaceholder();
+            return;
+        }
         this.resize();
 
         const { mag_norm, freqs, times } = currentData;
         const nTime = mag_norm.length;
         const nFreq = mag_norm[0].length;
         const W = Math.max(100, this.canvas.width || 800);
-        const H = Math.max(100, this.canvas.height || 500);
+        const H = Math.max(100, this.canvas.height || 320);
 
         let imgData;
         try {

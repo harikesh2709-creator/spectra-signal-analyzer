@@ -17,19 +17,28 @@ class ConstellationRenderer {
     resize() {
         if (!this.canvas) return;
         const rect = this.canvas.getBoundingClientRect();
-        this.canvas.width = Math.max(100, Math.floor(rect.width || 200));
-        this.canvas.height = Math.max(100, Math.floor(rect.height || 170));
+        const parentW = this.canvas.parentElement ? this.canvas.parentElement.clientWidth : 0;
+        const parentH = this.canvas.parentElement ? this.canvas.parentElement.clientHeight : 0;
+        const w = rect.width > 0 ? rect.width : (parentW > 0 ? parentW : 450);
+        const h = rect.height > 0 ? rect.height : (parentH > 0 ? parentH : 380);
+        this.canvas.width = Math.max(200, Math.floor(w));
+        this.canvas.height = Math.max(150, Math.floor(h));
     }
 
     setMode(mode) {
         this.displayMode = mode;
         if (this.lastIData && this.lastQData) {
             this.render(this.lastIData, this.lastQData, this.lastOptions);
+        } else {
+            this.clear();
         }
     }
 
     render(iData, qData, options = {}) {
-        if (!iData || !qData || iData.length === 0) return;
+        if (!iData || !qData || iData.length === 0) {
+            this.clear();
+            return;
+        }
         this.lastIData = iData;
         this.lastQData = qData;
         this.lastOptions = options;
@@ -211,13 +220,42 @@ class ConstellationRenderer {
         this.resize();
         this.lastIData = null;
         this.lastQData = null;
-        this.ctx.fillStyle = '#030306';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.fillStyle = 'rgba(142, 149, 169, 0.3)';
-        this.ctx.font = '11px "Outfit"';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText('No constellation data', this.canvas.width / 2, this.canvas.height / 2);
-        this.ctx.textAlign = 'start';
+        const ctx = this.ctx;
+        const W = this.canvas.width;
+        const H = this.canvas.height;
+        const cx = W / 2;
+        const cy = H / 2;
+
+        ctx.fillStyle = '#030306';
+        ctx.fillRect(0, 0, W, H);
+
+        // Concentric circles
+        ctx.strokeStyle = 'rgba(200, 169, 110, 0.08)';
+        ctx.lineWidth = 0.5;
+        const radius = Math.min(cx, cy) - 20;
+        for (let r = 0.33; r <= 1.0; r += 0.33) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius * r, 0, 2 * Math.PI);
+            ctx.stroke();
+        }
+
+        // Axes
+        ctx.strokeStyle = 'rgba(200, 169, 110, 0.15)';
+        ctx.beginPath();
+        ctx.moveTo(0, cy); ctx.lineTo(W, cy);
+        ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
+        ctx.stroke();
+
+        // Labels
+        ctx.fillStyle = 'rgba(200, 169, 110, 0.6)';
+        ctx.font = '600 12px "Outfit", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('CONSTELLATION LAB · STANDBY', cx, cy - 10);
+
+        ctx.fillStyle = 'rgba(142, 149, 169, 0.5)';
+        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.fillText('Awaiting symbol demodulation and carrier lock...', cx, cy + 12);
+        ctx.textAlign = 'start';
     }
 }
 
