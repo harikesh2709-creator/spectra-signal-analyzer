@@ -987,17 +987,16 @@
             if (!resp.ok) throw new Error(data.detail || 'Analysis failed');
 
             lastAnalysisData = data;
-            const est = data.estimation;
+            lastPsdData = data.psd;
+            lastWfData = data.spectrogram;
+            renderPSD(lastPsdData);
+            waterfallRenderer?.render(lastWfData);
+
+            const est = data.estimation || {};
             updateParams(est, data.signal_info, data);
             if (data.ai_intelligence) {
                 renderAIIntelligence(data.ai_intelligence);
             }
-
-            // Render PSD & Waterfall and cache them
-            lastPsdData = data.psd;
-            lastWfData = data.spectrogram;
-            renderPSD(lastPsdData);
-            waterfallRenderer.render(lastWfData);
 
             const obwCenter = est.occupied_bandwidth ? est.occupied_bandwidth.center_freq : 0;
             const obwHz = est.occupied_bandwidth ? est.occupied_bandwidth.obw_hz : 0;
@@ -1095,15 +1094,16 @@
             }
 
             // Update stats
-            lastEvmPercent = data.evm_percent;
-            $('#evm-badge').textContent = `EVM: ${data.evm_percent.toFixed(2)}%`;
-            $('#fec-bits-val').textContent = `${data.num_bits.toLocaleString()} bits`;
+            lastEvmPercent = typeof data.evm_percent === 'number' ? data.evm_percent : (parseFloat(data.evm_percent) || 0);
+            const evmStr = lastEvmPercent.toFixed(2);
+            if ($('#evm-badge')) $('#evm-badge').textContent = `EVM: ${evmStr}%`;
+            if ($('#fec-bits-val')) $('#fec-bits-val').textContent = `${(data.num_bits || 0).toLocaleString()} bits`;
 
             if (lastAnalysisData) {
                 updateSignalHealth(lastAnalysisData.estimation, lastAnalysisData.signal_info, lastEvmPercent, lastCorrelation && lastPositions && lastPositions.length > 0);
             }
 
-            log(`Demodulated ${data.num_symbols.toLocaleString()} symbols (${mod.toUpperCase()}) — EVM ${data.evm_percent.toFixed(2)}%, carrier offset ${formatFreq(data.carrier_offset)}`, 'ok');
+            log(`Demodulated ${(data.num_symbols || 0).toLocaleString()} symbols (${mod.toUpperCase()}) — EVM ${evmStr}%, carrier offset ${formatFreq(data.carrier_offset || 0)}`, 'ok');
 
             if (showLoader) {
                 setStatus('active', `DEMODULATED · ${mod.toUpperCase()}`);
@@ -1755,15 +1755,21 @@
 
     function setupResizeHandlers() {
         window.addEventListener('resize', () => {
-            waterfallRenderer.resize();
-            constRenderer.resize();
+            waterfallRenderer?.resize();
+            constRenderer?.resize();
             rfOrbitalVisualizer?.resize();
             tacticalRadar?.resize();
-            if (constRenderer.lastIData) {
+            if (lastWfData) {
+                waterfallRenderer?.render(lastWfData);
+            }
+            if (lastPsdData) {
+                renderPSD(lastPsdData);
+            }
+            if (constRenderer?.lastIData) {
                 constRenderer.render(constRenderer.lastIData, constRenderer.lastQData, constRenderer.lastOptions);
             }
             if (lastDepthScores) {
-                protocolViewer.renderDepthSearchChart(lastDepthScores, lastBestDepth);
+                protocolViewer?.renderDepthSearchChart(lastDepthScores, lastBestDepth);
             }
         });
     }
