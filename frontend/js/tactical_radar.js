@@ -174,4 +174,8 @@ class TacticalRadar {
     }
 }
 
+TacticalRadar.prototype.updateTarget = function(bearingDeg, rangeKm, profile = 'LEO Spacecraft', isJamming = false) {
+    this.setEmitter(bearingDeg, rangeKm, profile, isJamming);
+};
+
 window.TacticalRadar = TacticalRadar;
